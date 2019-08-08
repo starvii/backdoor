@@ -88,7 +88,7 @@ int main(int argc, const char **argv, const char **envp) {
         exit(0);
     }
     for (i = 0; i < 32; i++) {
-        signal(i, block_signal);
+        signal(i, SIG_IGN);
     }
     // signal(SIGSTOP, SIG_IGN);
     _daemon();
